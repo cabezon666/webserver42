@@ -1,0 +1,30 @@
+webserv/
+├── Makefile
+├── config/
+│   ├── default.conf
+│   └── test.conf
+├── includes/
+│   ├── webserv.hpp
+│   ├── Server.hpp
+│   ├── Request.hpp
+│   ├── Response.hpp
+│   ├── Config.hpp
+│   ├── Location.hpp
+│   └── CGI.hpp
+├── src/
+│   ├── main.cpp
+│   ├── Server.cpp
+│   ├── Request.cpp
+│   ├── Response.cpp
+│   ├── Config.cpp
+│   ├── Location.cpp
+│   ├── CGI.cpp
+│   └── utils.cpp
+├── www/
+│   ├── index.html
+│   ├── error/
+│   │   ├── 404.html
+│   │   └── 500.html
+│   └── uploads/
+└── cgi-bin/
+    └── test.php
