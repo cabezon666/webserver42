@@ -5,7 +5,6 @@ SRCDIR = src
 INCDIR = inc
 OBJDIR = obj
 
-# Lista de archivos fuente
 SOURCES = CGI.cpp \
           Config.cpp \
           HttpRequest.cpp \
@@ -16,10 +15,10 @@ SOURCES = CGI.cpp \
           utils.cpp \
           WebServer.cpp
 
-# Generar lista de objetos
+# cambie aca para que los objetos se formen en otra carpeta.
 OBJECTS = $(SOURCES:%.cpp=$(OBJDIR)/%.o)
 
-# Colores para output
+# es mi mismo makefile de siempre al final.
 GREEN = \033[0;32m
 YELLOW = \033[0;33m
 RED = \033[0;31m
@@ -49,7 +48,7 @@ fclean: clean
 
 re: fclean all
 
-# Crear estructura de directorios para el servidor
+# A partir de aca, lo pimpeo la AI.
 dirs:
 	@echo "$(YELLOW)Creating directory structure...$(NC)"
 	@mkdir -p www/error www/uploads www/cgi-bin www/public www/api configs
@@ -65,15 +64,15 @@ examples: dirs
 	@chmod +x www/cgi-bin/test.py
 	@echo "$(GREEN)✓ Example files created$(NC)"
 
-# Ayuda
-help:
-	@echo "$(GREEN)Available targets:$(NC)"
-	@echo "  all      - Build the webserver"
-	@echo "  clean    - Remove object files"
-	@echo "  fclean   - Remove object files and executable"
-	@echo "  re       - Rebuild everything"
-	@echo "  dirs     - Create directory structure"
-	@echo "  examples - Create example files"
-	@echo "  help     - Show this help message"
+# la ayuda, boh.
+# help:
+# 	@echo "$(GREEN)Available targets:$(NC)"
+# 	@echo "  all      - Build the webserver"
+# 	@echo "  clean    - Remove object files"
+# 	@echo "  fclean   - Remove object files and executable"
+# 	@echo "  re       - Rebuild everything"
+# 	@echo "  dirs     - Create directory structure"
+# 	@echo "  examples - Create example files"
+# 	@echo "  help     - Show this help message"
 
 .PHONY: all clean fclean re dirs examples help
