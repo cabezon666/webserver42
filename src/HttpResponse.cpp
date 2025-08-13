@@ -6,7 +6,7 @@
 /*   By: ewiese-m <ewiese-m@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/13 15:46:43 by ewiese-m          #+#    #+#             */
-/*   Updated: 2025/08/13 16:08:15 by ewiese-m         ###   ########.fr       */
+/*   Updated: 2025/08/13 23:24:37 by ewiese-m         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,36 +15,30 @@
 #include <algorithm>
 #include <cctype>
 
-// Initialize status messages map
 const std::map<int, std::string> HttpResponse::status_messages_ = HttpResponse::initStatusCodes();
 
-// Constructor - default to 200 OK
-HttpResponse::HttpResponse() :
-    status_code_(200),
-    connection_type_("close"),
-    headers_(),
-    body_("") {
+HttpResponse::HttpResponse() : status_code_(200),
+                               connection_type_("close"),
+                               headers_(),
+                               body_("")
+{
 
-    // Set default headers
     headers_["server"] = "webserv/1.0";
     headers_["content-type"] = "text/html";
 }
 
-// Initialize status code descriptions
-std::map<int, std::string> HttpResponse::initStatusCodes() {
+std::map<int, std::string> HttpResponse::initStatusCodes()
+{
     std::map<int, std::string> codes;
 
-    // 1xx Informational
     codes[100] = "Continue";
     codes[101] = "Switching Protocols";
 
-    // 2xx Success
     codes[200] = "OK";
     codes[201] = "Created";
     codes[202] = "Accepted";
     codes[204] = "No Content";
 
-    // 3xx Redirection
     codes[301] = "Moved Permanently";
     codes[302] = "Found";
     codes[303] = "See Other";
@@ -52,7 +46,6 @@ std::map<int, std::string> HttpResponse::initStatusCodes() {
     codes[307] = "Temporary Redirect";
     codes[308] = "Permanent Redirect";
 
-    // 4xx Client Error
     codes[400] = "Bad Request";
     codes[401] = "Unauthorized";
     codes[403] = "Forbidden";
@@ -65,7 +58,6 @@ std::map<int, std::string> HttpResponse::initStatusCodes() {
     codes[414] = "URI Too Long";
     codes[415] = "Unsupported Media Type";
 
-    // 5xx Server Error
     codes[500] = "Internal Server Error";
     codes[501] = "Not Implemented";
     codes[502] = "Bad Gateway";
@@ -76,49 +68,48 @@ std::map<int, std::string> HttpResponse::initStatusCodes() {
     return codes;
 }
 
-// Serialize response to HTTP format
-std::string HttpResponse::serialize() const {
+std::string HttpResponse::serialize() const
+{
     std::ostringstream response;
 
-    // Status line
     response << "HTTP/1.1 " << status_code_ << " ";
 
-    // Get status message
     std::map<int, std::string>::const_iterator it = status_messages_.find(status_code_);
-    if (it != status_messages_.end()) {
+    if (it != status_messages_.end())
+    {
         response << it->second;
-    } else {
+    }
+    else
+    {
         response << "Unknown";
     }
     response << "\r\n";
 
-    // Add headers
     for (std::map<std::string, std::string>::const_iterator header_it = headers_.begin();
-         header_it != headers_.end(); ++header_it) {
+         header_it != headers_.end(); ++header_it)
+    {
         response << header_it->first << ": " << header_it->second << "\r\n";
     }
 
-    // Add content-length if body exists
-    if (!body_.empty()) {
+    if (!body_.empty())
+    {
         response << "content-length: " << body_.length() << "\r\n";
     }
 
-    // Add connection type
     response << "connection: " << connection_type_ << "\r\n";
 
-    // Empty line between headers and body
     response << "\r\n";
 
-    // Add body if present
-    if (!body_.empty()) {
+    if (!body_.empty())
+    {
         response << body_;
     }
 
     return response.str();
 }
 
-// Set error response
-void HttpResponse::setError(int code, const std::string& message) {
+void HttpResponse::setError(int code, const std::string &message)
+{
     status_code_ = code;
     headers_["content-type"] = "text/html";
 
@@ -137,46 +128,49 @@ void HttpResponse::setError(int code, const std::string& message) {
     body_ = error_body.str();
 }
 
-// Add or update header
-void HttpResponse::addHeader(const std::string& key, const std::string& value) {
+void HttpResponse::addHeader(const std::string &key, const std::string &value)
+{
     std::string lower_key = toLowerCase(key);
     headers_[lower_key] = value;
 }
 
-// --- Accessors ---
-
-int HttpResponse::getStatusCode() const {
+int HttpResponse::getStatusCode() const
+{
     return status_code_;
 }
 
-const std::string& HttpResponse::getBody() const {
+const std::string &HttpResponse::getBody() const
+{
     return body_;
 }
 
-const std::string& HttpResponse::getConnectionType() const {
+const std::string &HttpResponse::getConnectionType() const
+{
     return connection_type_;
 }
 
-const std::map<std::string, std::string>& HttpResponse::getHeaders() const {
+const std::map<std::string, std::string> &HttpResponse::getHeaders() const
+{
     return headers_;
 }
 
-// --- Mutators ---
-
-void HttpResponse::setStatusCode(int code) {
+void HttpResponse::setStatusCode(int code)
+{
     status_code_ = code;
 }
 
-void HttpResponse::setBody(const std::string& content) {
+void HttpResponse::setBody(const std::string &content)
+{
     body_ = content;
 }
 
-void HttpResponse::setConnectionType(const std::string& type) {
+void HttpResponse::setConnectionType(const std::string &type)
+{
     connection_type_ = type;
 }
 
-// Convert string to lowercase
-std::string HttpResponse::toLowerCase(const std::string& str) {
+std::string HttpResponse::toLowerCase(const std::string &str)
+{
     std::string result = str;
     std::transform(result.begin(), result.end(), result.begin(), ::tolower);
     return result;

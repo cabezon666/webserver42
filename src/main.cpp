@@ -6,7 +6,7 @@
 /*   By: ewiese-m <ewiese-m@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/01 15:46:51 by ewiese-m          #+#    #+#             */
-/*   Updated: 2025/08/13 15:46:56 by ewiese-m         ###   ########.fr       */
+/*   Updated: 2025/08/13 23:24:37 by ewiese-m         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,13 +16,12 @@
 #include <cstdlib>
 #include <iostream>
 
-// Signal handler for SIGPIPE (broken pipe)
-void	signalHandler(int signum)
+void signalHandler(int signum)
 {
 	if (signum == SIGPIPE)
 	{
-		// Ignore SIGPIPE - handle it locally in send/recv
-		return ;
+
+		return;
 	}
 	if (signum == SIGINT || signum == SIGTERM)
 	{
@@ -31,7 +30,7 @@ void	signalHandler(int signum)
 	}
 }
 
-void	printUsage(const char *program)
+void printUsage(const char *program)
 {
 	std::cout << "Usage: " << program << " [config_file]" << std::endl;
 	std::cout << "  config_file: Path to configuration file (default: configs/default.conf)" << std::endl;
@@ -39,9 +38,10 @@ void	printUsage(const char *program)
 	std::cout << "  " << program << " configs/default.conf" << std::endl;
 }
 
-void	printServerInfo(const std::vector<ServerConfig> &servers)
+void printServerInfo(const std::vector<ServerConfig> &servers)
 {
-	std::cout << "\n" << std::string(60, '=') << std::endl;
+	std::cout << "\n"
+			  << std::string(60, '=') << std::endl;
 	std::cout << "            WEBSERV CONFIGURATION LOADED" << std::endl;
 	std::cout << std::string(60, '=') << std::endl;
 	for (size_t i = 0; i < servers.size(); ++i)
@@ -67,7 +67,8 @@ void	printServerInfo(const std::vector<ServerConfig> &servers)
 		{
 			std::cout << "   Error Pages: ";
 			for (std::map<int,
-				std::string>::const_iterator it = s._error_pages.begin(); it != s._error_pages.end(); ++it)
+						  std::string>::const_iterator it = s._error_pages.begin();
+				 it != s._error_pages.end(); ++it)
 			{
 				if (it != s._error_pages.begin())
 					std::cout << ", ";
@@ -114,12 +115,13 @@ void	printServerInfo(const std::vector<ServerConfig> &servers)
 			}
 		}
 	}
-	std::cout << "\n" << std::string(60, '=') << std::endl;
+	std::cout << "\n"
+			  << std::string(60, '=') << std::endl;
 }
 
-int	main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
-	// Set up signal handlers
+
 	signal(SIGPIPE, signalHandler);
 	signal(SIGINT, signalHandler);
 	signal(SIGTERM, signalHandler);
@@ -129,7 +131,7 @@ int	main(int argc, char *argv[])
 		printUsage(argv[0]);
 		return (EXIT_FAILURE);
 	}
-	// Determine config file path
+
 	std::string config_file = "configs/default.conf";
 	if (argc == 2)
 	{
@@ -143,16 +145,16 @@ int	main(int argc, char *argv[])
 	try
 	{
 		std::cout << "\n🔧 Loading configuration from: " << config_file << std::endl;
-		// Parse configuration
+
 		Config config(config_file);
 		const std::vector<ServerConfig> &servers = config.getServers();
 		if (servers.empty())
 		{
 			throw std::runtime_error("No servers configured");
 		}
-		// Print configuration summary
+
 		printServerInfo(servers);
-		// Start web server
+
 		WebServer server(servers);
 		server.run();
 	}
