@@ -5,8 +5,8 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: webserv <webserv@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/08/07 15:51:16 by vflores-          #+#    #+#             */
-/*   Updated: 2025/08/11 15:00:00 by webserv         ###   ########.fr       */
+/*   Created: 2025/08/07 15:51:16 by webserv          #+#    #+#             */
+/*   Updated: 2025/08/13 15:00:00 by webserv         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -56,6 +56,9 @@ private:
     void handlePostRequest(ClientConnection& conn,
                           const HttpRequest& request,
                           const LocationConfig& location);
+    void handlePutRequest(ClientConnection& conn,
+                         const HttpRequest& request,
+                         const LocationConfig& location);
     void handleDeleteRequest(ClientConnection& conn,
                             const HttpRequest& request,
                             const LocationConfig& location);
@@ -70,7 +73,7 @@ private:
                          const LocationConfig& location);
 
     // Response methods
-    void serveStaticFile(int client_fd, const std::string& file_path);
+    void serveStaticFile(int client_fd, const std::string& file_path, bool head_only = false);
     void sendResponse(int client_fd, const HttpResponse& response);
     void sendErrorResponse(int client_fd, int code,
                           const std::string& message,

@@ -5,8 +5,8 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: webserv <webserv@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/08/07 15:23:16 by vflores-          #+#    #+#             */
-/*   Updated: 2025/08/11 15:00:00 by webserv         ###   ########.fr       */
+/*   Created: 2025/08/07 15:23:16 by webserv          #+#    #+#             */
+/*   Updated: 2025/08/13 12:00:00 by webserv         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,6 +26,8 @@
 #include <sstream>
 #include <map>
 #include <cerrno>
+#include <sys/stat.h>
+#include <dirent.h>
 
 // Client connection structure
 struct ClientConnection {
@@ -34,6 +36,7 @@ struct ClientConnection {
     time_t last_activity;
     bool keep_alive;
     const ServerConfig* server;
+    std::string client_ip;
 };
 
 // Static member for client connections
@@ -59,7 +62,7 @@ void WebServer::setupSockets() {
     for (size_t i = 0; i < _servers.size(); i++) {
         // Create address key
         std::ostringstream addr_key;
-        addr_key << _servers[i]._host << ":" << _servers[i].getPort();
+        addr_key << _servers[i]._host << ":" << _servers[i]._port;
 
         // Check if already bound
         if (used_addresses.find(addr_key.str()) != used_addresses.end()) {
@@ -93,6 +96,8 @@ void WebServer::setupSockets() {
         // Convert host to network address
         if (_servers[i]._host == "0.0.0.0" || _servers[i]._host.empty()) {
             addr.sin_addr.s_addr = INADDR_ANY;
+        } else if (_servers[i]._host == "localhost" || _servers[i]._host == "127.0.0.1") {
+            addr.sin_addr.s_addr = inet_addr("127.0.0.1");
         } else {
             if (inet_pton(AF_INET, _servers[i]._host.c_str(), &addr.sin_addr) <= 0) {
                 std::cerr << "Invalid address: " << _servers[i]._host << std::endl;
@@ -101,7 +106,7 @@ void WebServer::setupSockets() {
             }
         }
 
-        addr.sin_port = htons(_servers[i].getPort());
+        addr.sin_port = htons(_servers[i]._port);
 
         // Bind socket
         if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
@@ -128,7 +133,18 @@ void WebServer::setupSockets() {
         used_addresses[addr_key.str()] = server_fd;
 
         std::cout << "✓ Listening on " << _servers[i]._host
-                  << ":" << _servers[i].getPort() << std::endl;
+                  << ":" << _servers[i]._port;
+
+        // Print server names
+        if (!_servers[i]._server_names.empty()) {
+            std::cout << " (";
+            for (size_t j = 0; j < _servers[i]._server_names.size(); j++) {
+                if (j > 0) std::cout << ", ";
+                std::cout << _servers[i]._server_names[j];
+            }
+            std::cout << ")";
+        }
+        std::cout << std::endl;
     }
 
     if (_server_fds.empty()) {
@@ -147,7 +163,7 @@ void WebServer::mainLoop() {
         // Check for timeouts
         checkTimeouts();
 
-        // Poll for events
+        // Poll for events with 1 second timeout
         int activity = poll(_poll_fds.data(), _poll_fds.size(), 1000);
 
         if (activity < 0) {
@@ -172,7 +188,6 @@ void WebServer::mainLoop() {
                 // Connection closed or error
                 if (std::find(_server_fds.begin(), _server_fds.end(),
                              _poll_fds[i].fd) == _server_fds.end()) {
-                    std::cout << "Client disconnected: " << _poll_fds[i].fd << std::endl;
                     removeClient(_poll_fds[i].fd);
                 }
             }
@@ -209,25 +224,28 @@ void WebServer::acceptNewConnection(int server_fd) {
     conn.last_activity = time(NULL);
     conn.keep_alive = false;
 
-    // Find appropriate server config
-    conn.server = &_servers[0];  // Default to first server
-    for (size_t i = 0; i < _servers.size(); i++) {
-        // Match by port for now (can be enhanced with Host header later)
-        sockaddr_in local_addr;
-        socklen_t local_len = sizeof(local_addr);
-        getsockname(server_fd, (struct sockaddr*)&local_addr, &local_len);
+    // Get client IP
+    char client_ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+    conn.client_ip = client_ip;
 
-        if (_servers[i].getPort() == ntohs(local_addr.sin_port)) {
-            conn.server = &_servers[i];
-            break;
+    // Find appropriate server config based on port
+    conn.server = &_servers[0];  // Default to first server
+
+    sockaddr_in local_addr;
+    socklen_t local_len = sizeof(local_addr);
+    if (getsockname(server_fd, (struct sockaddr*)&local_addr, &local_len) == 0) {
+        int local_port = ntohs(local_addr.sin_port);
+
+        for (size_t i = 0; i < _servers.size(); i++) {
+            if (_servers[i]._port == local_port) {
+                conn.server = &_servers[i];
+                break;
+            }
         }
     }
 
     g_clients[client_fd] = conn;
-
-    // Get client IP
-    char client_ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
 
     std::cout << "✓ New client connected: " << client_ip
               << " (fd: " << client_fd << ")" << std::endl;
@@ -249,7 +267,8 @@ void WebServer::handleClientData(int client_fd) {
 
     if (bytes <= 0) {
         if (bytes == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
-            std::cout << "Client disconnected: " << client_fd << std::endl;
+            std::cout << "Client disconnected: " << conn.client_ip
+                      << " (fd: " << client_fd << ")" << std::endl;
             removeClient(client_fd);
         }
         return;
@@ -270,8 +289,8 @@ void WebServer::handleClientData(int client_fd) {
             removeClient(client_fd);
         }
     } else if (conn.buffer.size() > 1024 * 1024) {
-        // Request too large (> 1MB)
-        sendErrorResponse(client_fd, 413, "Payload Too Large");
+        // Request too large (> 1MB headers)
+        sendErrorResponse(client_fd, 413, "Payload Too Large", conn.server);
         removeClient(client_fd);
     }
 }
@@ -326,18 +345,47 @@ void WebServer::processRequest(ClientConnection& conn) {
     // Parse HTTP request
     HttpRequest request;
     if (!request.parse(conn.buffer)) {
-        sendErrorResponse(conn.fd, 400, "Bad Request");
+        sendErrorResponse(conn.fd, 400, "Bad Request", conn.server);
         return;
     }
 
+    // Check Host header for virtual host selection
+    std::string host = request.getHeader("host");
+    if (!host.empty()) {
+        // Remove port from host if present
+        size_t colon = host.find(':');
+        if (colon != std::string::npos) {
+            host = host.substr(0, colon);
+        }
+
+        // Find matching server by server_name
+        for (size_t i = 0; i < _servers.size(); i++) {
+            for (size_t j = 0; j < _servers[i]._server_names.size(); j++) {
+                if (_servers[i]._server_names[j] == host &&
+                    _servers[i]._port == conn.server->_port) {
+                    conn.server = &_servers[i];
+                    break;
+                }
+            }
+        }
+    }
+
     std::cout << "📥 " << request.getMethod() << " " << request.getUri()
-              << " from fd:" << conn.fd << std::endl;
+              << " from " << conn.client_ip << " (fd:" << conn.fd << ")"
+              << " [Server: " << (conn.server->_server_names.empty() ?
+                 "default" : conn.server->_server_names[0]) << "]" << std::endl;
 
     // Check connection header
     std::string connection = request.getHeader("connection");
     conn.keep_alive = (request.getHttpVersion() == "HTTP/1.1" &&
                       toLowerCase(connection) != "close") ||
                      (toLowerCase(connection) == "keep-alive");
+
+    // Check body size
+    if (request.getBody().size() > conn.server->_client_max_body_size) {
+        sendErrorResponse(conn.fd, 413, "Payload Too Large", conn.server);
+        return;
+    }
 
     // Find matching location
     const LocationConfig& location = conn.server->findLocationForRequest(request.getUri());
@@ -353,20 +401,22 @@ void WebServer::processRequest(ClientConnection& conn) {
         }
 
         if (!method_allowed) {
-            sendErrorResponse(conn.fd, 405, "Method Not Allowed");
+            sendErrorResponse(conn.fd, 405, "Method Not Allowed", conn.server);
             return;
         }
     }
 
-    // Handle different methods
-    if (request.getMethod() == "GET") {
+    // Handle different request types
+    if (request.getMethod() == "GET" || request.getMethod() == "HEAD") {
         handleGetRequest(conn, request, location);
     } else if (request.getMethod() == "POST") {
         handlePostRequest(conn, request, location);
+    } else if (request.getMethod() == "PUT") {
+        handlePutRequest(conn, request, location);
     } else if (request.getMethod() == "DELETE") {
         handleDeleteRequest(conn, request, location);
     } else {
-        sendErrorResponse(conn.fd, 501, "Not Implemented");
+        sendErrorResponse(conn.fd, 501, "Not Implemented", conn.server);
     }
 }
 
@@ -397,11 +447,26 @@ void WebServer::handleGetRequest(ClientConnection& conn,
 
     // Security: prevent directory traversal
     if (uri.find("../") != std::string::npos) {
-        sendErrorResponse(conn.fd, 403, "Forbidden");
+        sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
         return;
     }
 
+    // Remove location prefix from URI if it matches
+    if (location._path != "/" && uri.find(location._path) == 0) {
+        uri = uri.substr(location._path.length());
+        if (uri.empty() || uri[0] != '/') {
+            uri = "/" + uri;
+        }
+    }
+
     file_path += uri;
+
+    // Check for CGI
+    if (!location._cgi_extension.empty() &&
+        file_path.find(location._cgi_extension) != std::string::npos) {
+        handleCGIRequest(conn, request, location, file_path);
+        return;
+    }
 
     // Check if path exists
     if (!fileExists(file_path)) {
@@ -425,7 +490,7 @@ void WebServer::handleGetRequest(ClientConnection& conn,
             // Generate directory listing
             std::string listing = generateDirectoryListing(file_path, uri);
             if (listing.empty()) {
-                sendErrorResponse(conn.fd, 403, "Forbidden");
+                sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
                 return;
             }
 
@@ -436,38 +501,24 @@ void WebServer::handleGetRequest(ClientConnection& conn,
             sendResponse(conn.fd, response);
             return;
         } else {
-            sendErrorResponse(conn.fd, 403, "Forbidden");
+            sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
             return;
         }
     }
 
     // Check if file is readable
     if (!isReadable(file_path)) {
-        sendErrorResponse(conn.fd, 403, "Forbidden");
-        return;
-    }
-
-    // Check for CGI
-    if (!location._cgi_extension.empty() &&
-        file_path.find(location._cgi_extension) != std::string::npos) {
-        handleCGIRequest(conn, request, location, file_path);
+        sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
         return;
     }
 
     // Serve static file
-    serveStaticFile(conn.fd, file_path);
+    serveStaticFile(conn.fd, file_path, request.getMethod() == "HEAD");
 }
 
 void WebServer::handlePostRequest(ClientConnection& conn,
                                   const HttpRequest& request,
                                   const LocationConfig& location) {
-    // Check body size limit
-    if (conn.server->_client_max_body_size > 0 &&
-        request.getBody().size() > conn.server->_client_max_body_size) {
-        sendErrorResponse(conn.fd, 413, "Payload Too Large");
-        return;
-    }
-
     // Check for CGI
     std::string uri = request.getUri();
     size_t query_pos = uri.find('?');
@@ -475,7 +526,20 @@ void WebServer::handlePostRequest(ClientConnection& conn,
         uri = uri.substr(0, query_pos);
     }
 
-    std::string file_path = location._root + uri;
+    std::string file_path = location._root;
+    if (file_path.empty()) {
+        file_path = "./www";
+    }
+
+    // Remove location prefix from URI if it matches
+    if (location._path != "/" && uri.find(location._path) == 0) {
+        uri = uri.substr(location._path.length());
+        if (uri.empty() || uri[0] != '/') {
+            uri = "/" + uri;
+        }
+    }
+
+    file_path += uri;
 
     if (!location._cgi_extension.empty() &&
         file_path.find(location._cgi_extension) != std::string::npos) {
@@ -490,7 +554,57 @@ void WebServer::handlePostRequest(ClientConnection& conn,
     }
 
     // Default: method not allowed for this resource
-    sendErrorResponse(conn.fd, 405, "Method Not Allowed");
+    sendErrorResponse(conn.fd, 405, "Method Not Allowed", conn.server);
+}
+
+void WebServer::handlePutRequest(ClientConnection& conn,
+                                 const HttpRequest& request,
+                                 const LocationConfig& location) {
+    // Build file path
+    std::string file_path = location._root;
+    if (file_path.empty()) {
+        file_path = "./www";
+    }
+
+    std::string uri = urlDecode(request.getUri());
+
+    // Security: prevent directory traversal
+    if (uri.find("../") != std::string::npos) {
+        sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
+        return;
+    }
+
+    // Remove location prefix from URI if it matches
+    if (location._path != "/" && uri.find(location._path) == 0) {
+        uri = uri.substr(location._path.length());
+        if (uri.empty() || uri[0] != '/') {
+            uri = "/" + uri;
+        }
+    }
+
+    file_path += uri;
+
+    // Check if directory path exists
+    std::string dir_path = file_path.substr(0, file_path.find_last_of('/'));
+    if (!fileExists(dir_path)) {
+        sendErrorResponse(conn.fd, 404, "Not Found", conn.server);
+        return;
+    }
+
+    // Write file
+    bool file_existed = fileExists(file_path);
+    if (writeFile(file_path, request.getBody())) {
+        HttpResponse response;
+        response.setStatusCode(file_existed ? 204 : 201);  // No Content or Created
+        if (!file_existed) {
+            response.addHeader("location", request.getUri());
+        }
+        sendResponse(conn.fd, response);
+        std::cout << "📝 PUT file: " << file_path << " ("
+                  << (file_existed ? "updated" : "created") << ")" << std::endl;
+    } else {
+        sendErrorResponse(conn.fd, 500, "Internal Server Error", conn.server);
+    }
 }
 
 void WebServer::handleDeleteRequest(ClientConnection& conn,
@@ -506,27 +620,35 @@ void WebServer::handleDeleteRequest(ClientConnection& conn,
 
     // Security: prevent directory traversal
     if (uri.find("../") != std::string::npos) {
-        sendErrorResponse(conn.fd, 403, "Forbidden");
+        sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
         return;
+    }
+
+    // Remove location prefix from URI if it matches
+    if (location._path != "/" && uri.find(location._path) == 0) {
+        uri = uri.substr(location._path.length());
+        if (uri.empty() || uri[0] != '/') {
+            uri = "/" + uri;
+        }
     }
 
     file_path += uri;
 
     // Check if file exists
     if (!fileExists(file_path)) {
-        sendErrorResponse(conn.fd, 404, "Not Found");
+        sendErrorResponse(conn.fd, 404, "Not Found", conn.server);
         return;
     }
 
     // Don't allow deleting directories
     if (isDirectory(file_path)) {
-        sendErrorResponse(conn.fd, 403, "Forbidden");
+        sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
         return;
     }
 
     // Check if file is writable
     if (!isWritable(file_path)) {
-        sendErrorResponse(conn.fd, 403, "Forbidden");
+        sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
         return;
     }
 
@@ -537,7 +659,7 @@ void WebServer::handleDeleteRequest(ClientConnection& conn,
         sendResponse(conn.fd, response);
         std::cout << "🗑️  Deleted: " << file_path << std::endl;
     } else {
-        sendErrorResponse(conn.fd, 500, "Internal Server Error");
+        sendErrorResponse(conn.fd, 500, "Internal Server Error", conn.server);
     }
 }
 
@@ -547,8 +669,24 @@ void WebServer::handleCGIRequest(ClientConnection& conn,
                                  const std::string& script_path) {
     std::cout << "🔧 Executing CGI: " << script_path << std::endl;
 
+    // Check if script exists and is executable
+    if (!fileExists(script_path)) {
+        sendErrorResponse(conn.fd, 404, "Not Found", conn.server);
+        return;
+    }
+
+    if (!isExecutable(script_path)) {
+        sendErrorResponse(conn.fd, 403, "Forbidden", conn.server);
+        return;
+    }
+
     CGI cgi(request, location);
     std::string response = cgi.execute(script_path);
+
+    if (response.empty()) {
+        sendErrorResponse(conn.fd, 500, "Internal Server Error", conn.server);
+        return;
+    }
 
     send(conn.fd, response.c_str(), response.length(), 0);
 }
@@ -577,6 +715,11 @@ void WebServer::handleFileUpload(ClientConnection& conn,
 
     // Build upload path
     std::string upload_path = location._upload_path;
+    if (!fileExists(upload_path)) {
+        // Try to create directory
+        mkdir(upload_path.c_str(), 0755);
+    }
+
     if (upload_path[upload_path.length() - 1] != '/') {
         upload_path += '/';
     }
@@ -587,15 +730,16 @@ void WebServer::handleFileUpload(ClientConnection& conn,
         HttpResponse response;
         response.setStatusCode(201);  // Created
         response.addHeader("location", "/" + upload_path);
-        response.setBody("File uploaded successfully");
+        response.setBody("File uploaded successfully: " + filename);
+        response.addHeader("content-type", "text/plain");
         sendResponse(conn.fd, response);
         std::cout << "📤 File uploaded: " << upload_path << std::endl;
     } else {
-        sendErrorResponse(conn.fd, 500, "Failed to save file");
+        sendErrorResponse(conn.fd, 500, "Failed to save file", conn.server);
     }
 }
 
-void WebServer::serveStaticFile(int client_fd, const std::string& file_path) {
+void WebServer::serveStaticFile(int client_fd, const std::string& file_path, bool head_only) {
     // Read file
     std::string content = readFile(file_path);
     if (content.empty() && getFileSize(file_path) > 0) {
@@ -606,15 +750,24 @@ void WebServer::serveStaticFile(int client_fd, const std::string& file_path) {
     // Create response
     HttpResponse response;
     response.setStatusCode(200);
-    response.setBody(content);
+
+    if (!head_only) {
+        response.setBody(content);
+    }
+
     response.addHeader("content-type", getMimeType(file_path));
+    response.addHeader("content-length", toString(content.length()));
 
     sendResponse(client_fd, response);
 }
 
 void WebServer::sendResponse(int client_fd, const HttpResponse& response) {
     std::string data = response.serialize();
-    send(client_fd, data.c_str(), data.length(), 0);
+    ssize_t sent = send(client_fd, data.c_str(), data.length(), 0);
+
+    if (sent < 0) {
+        std::cerr << "Error sending response: " << strerror(errno) << std::endl;
+    }
 }
 
 void WebServer::sendErrorResponse(int client_fd, int code,

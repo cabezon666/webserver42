@@ -6,7 +6,7 @@
 /*   By: webserv <webserv@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/11 14:00:00 by webserv          #+#    #+#             */
-/*   Updated: 2025/08/11 14:00:00 by webserv         ###   ########.fr       */
+/*   Updated: 2025/08/13 14:00:00 by webserv         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,6 +19,7 @@
 #include <cctype>
 #include <ctime>
 #include <unistd.h>
+#include <iomanip>
 
 // Check if path is a directory
 bool isDirectory(const std::string& path) {
@@ -109,14 +110,15 @@ std::string generateDirectoryListing(const std::string& path, const std::string&
     html << "  <style>\n";
     html << "    body { font-family: monospace; margin: 20px; }\n";
     html << "    h1 { font-size: 24px; }\n";
-    html << "    table { border-collapse: collapse; }\n";
-    html << "    th, td { padding: 5px 15px; text-align: left; }\n";
-    html << "    th { border-bottom: 1px solid #ccc; }\n";
+    html << "    table { border-collapse: collapse; width: 100%; }\n";
+    html << "    th, td { padding: 8px 15px; text-align: left; }\n";
+    html << "    th { background-color: #f0f0f0; border-bottom: 2px solid #ddd; }\n";
     html << "    tr:hover { background-color: #f5f5f5; }\n";
     html << "    a { text-decoration: none; color: #0066cc; }\n";
     html << "    a:hover { text-decoration: underline; }\n";
     html << "    .dir { font-weight: bold; }\n";
-    html << "    .size { text-align: right; }\n";
+    html << "    .size { text-align: right; font-family: monospace; }\n";
+    html << "    .date { font-family: monospace; }\n";
     html << "  </style>\n";
     html << "</head>\n";
     html << "<body>\n";
@@ -135,9 +137,9 @@ std::string generateDirectoryListing(const std::string& path, const std::string&
     // Add parent directory link if not root
     if (uri != "/") {
         html << "      <tr>\n";
-        html << "        <td><a href=\"../\">../</a></td>\n";
+        html << "        <td><a href=\"../\" class=\"dir\">../</a></td>\n";
         html << "        <td class=\"size\">-</td>\n";
-        html << "        <td>-</td>\n";
+        html << "        <td class=\"date\">-</td>\n";
         html << "      </tr>\n";
     }
 
@@ -148,7 +150,7 @@ std::string generateDirectoryListing(const std::string& path, const std::string&
     while ((entry = readdir(dir)) != NULL) {
         std::string name = entry->d_name;
 
-        // Skip hidden files and current/parent directory
+        // Skip hidden files and current directory
         if (name[0] == '.') {
             continue;
         }
@@ -157,7 +159,7 @@ std::string generateDirectoryListing(const std::string& path, const std::string&
     }
     closedir(dir);
 
-    // Sort entries
+    // Sort entries alphabetically
     std::sort(entries.begin(), entries.end());
 
     // Generate table rows
@@ -189,7 +191,7 @@ std::string generateDirectoryListing(const std::string& path, const std::string&
             html << "</td>\n";
 
             // Last modified column
-            html << "        <td>" << formatTime(info.st_mtime) << "</td>\n";
+            html << "        <td class=\"date\">" << formatTime(info.st_mtime) << "</td>\n";
             html << "      </tr>\n";
         }
     }
@@ -197,7 +199,7 @@ std::string generateDirectoryListing(const std::string& path, const std::string&
     html << "    </tbody>\n";
     html << "  </table>\n";
     html << "  <hr>\n";
-    html << "  <p><i>webserv/1.0</i></p>\n";
+    html << "  <address>webserv/1.0 Server</address>\n";
     html << "</body>\n";
     html << "</html>\n";
 
@@ -211,11 +213,11 @@ std::string formatFileSize(size_t size) {
     if (size < 1024) {
         oss << size << " B";
     } else if (size < 1024 * 1024) {
-        oss << (size / 1024) << " KB";
+        oss << std::fixed << std::setprecision(1) << (size / 1024.0) << " KB";
     } else if (size < 1024 * 1024 * 1024) {
-        oss << (size / (1024 * 1024)) << " MB";
+        oss << std::fixed << std::setprecision(1) << (size / (1024.0 * 1024.0)) << " MB";
     } else {
-        oss << (size / (1024 * 1024 * 1024)) << " GB";
+        oss << std::fixed << std::setprecision(1) << (size / (1024.0 * 1024.0 * 1024.0)) << " GB";
     }
 
     return oss.str();
@@ -264,11 +266,22 @@ std::string getMimeType(const std::string& path) {
     if (ext == "wav") return "audio/wav";
     if (ext == "mp4") return "video/mp4";
     if (ext == "webm") return "video/webm";
+    if (ext == "ogg") return "audio/ogg";
+    if (ext == "avi") return "video/x-msvideo";
 
     // Archives
     if (ext == "zip") return "application/zip";
     if (ext == "tar") return "application/x-tar";
     if (ext == "gz") return "application/gzip";
+    if (ext == "rar") return "application/x-rar-compressed";
+
+    // Documents
+    if (ext == "doc") return "application/msword";
+    if (ext == "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (ext == "xls") return "application/vnd.ms-excel";
+    if (ext == "xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    if (ext == "ppt") return "application/vnd.ms-powerpoint";
+    if (ext == "pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
     // Default
     return "application/octet-stream";
@@ -301,6 +314,8 @@ std::string urlDecode(const std::string& str) {
 // URL encode
 std::string urlEncode(const std::string& str) {
     std::ostringstream result;
+    result.fill('0');
+    result << std::hex;
 
     for (size_t i = 0; i < str.length(); ++i) {
         unsigned char c = str[i];
@@ -310,7 +325,7 @@ std::string urlEncode(const std::string& str) {
         } else if (c == ' ') {
             result << '+';
         } else {
-            result << '%' << std::hex << std::uppercase << (int)c;
+            result << '%' << std::setw(2) << static_cast<int>(c);
         }
     }
 
