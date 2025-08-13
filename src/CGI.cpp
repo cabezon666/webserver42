@@ -6,7 +6,7 @@
 /*   By: ewiese-m <ewiese-m@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/01 15:38:11 by ewiese-m          #+#    #+#             */
-/*   Updated: 2025/08/13 15:38:17 by ewiese-m         ###   ########.fr       */
+/*   Updated: 2025/08/13 22:09:53 by ewiese-m         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -173,7 +173,7 @@ void CGI::executeCGIChild(const std::string& script_path, int pipe_in[2], int pi
     execve(argv[0], const_cast<char**>(argv), &env_vars_[0]);
 
     // If we reach here, exec failed
-    std::cerr << "CGI execution failed: " << strerror(errno) << std::endl;
+    std::cerr << "CGI execution failed: "<< std::endl;
     exit(1);
 }
 

@@ -6,7 +6,7 @@
 /*   By: ewiese-m <ewiese-m@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/13 16:01:06 by ewiese-m          #+#    #+#             */
-/*   Updated: 2025/08/13 16:01:12 by ewiese-m         ###   ########.fr       */
+/*   Updated: 2025/08/13 22:08:09 by ewiese-m         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -841,7 +841,7 @@ void WebServer::sendResponse(int client_fd, const HttpResponse &response)
 	sent = send(client_fd, data.c_str(), data.length(), 0);
 	if (sent < 0)
 	{
-		std::cerr << "Error sending response: " << strerror(errno) << std::endl;
+		std::cerr << "Error sending response" << std::endl;
 	}
 }
 
