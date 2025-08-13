@@ -49,69 +49,109 @@ const std::vector<ServerConfig> &Config::getServers() const
 
 void Config::parse(const std::string &config_file)
 {
-	std::ifstream file(config_file.c_str());
-	if (!file.is_open())
-	{
-		throw std::runtime_error("Could not open config file: " + config_file);
-	}
+    std::ifstream file(config_file.c_str());
+    if (!file.is_open())
+    {
+        throw std::runtime_error("Could not open config file: " + config_file);
+    }
 
-	std::string line;
-	while (std::getline(file, line))
-	{
-		std::istringstream iss(line);
-		//line.
-		std::string token;
-		iss >> token;
-		bool closed = false;
-		if (token == "server")
-		{
-			parseServerBlock(file, &closed);
-			if (!closed)
-				throw std::runtime_error(
-					"Bad configuration file format : open brackets on server config");
-		}
-	}
-	if (_servers.empty())
-		throw std::runtime_error("No servers in configuration file\n");
+    std::string line;
+    while (std::getline(file, line))
+    {
+        // Eliminar espacios en blanco al inicio y final
+        line.erase(0, line.find_first_not_of(" \t"));
+        line.erase(line.find_last_not_of(" \t") + 1);
+        
+        // Ignorar líneas vacías y comentarios
+        if (line.empty() || line[0] == '#')
+            continue;
+            
+        std::istringstream iss(line);
+        std::string token;
+        iss >> token;
+        
+        if (token == "server")
+        {
+            // Buscar la llave de apertura
+            std::string brace;
+            iss >> brace;
+            if (brace != "{")
+            {
+                // Buscar en la siguiente línea
+                std::getline(file, line);
+                line.erase(0, line.find_first_not_of(" \t"));
+                if (line != "{")
+                    throw std::runtime_error("Expected '{' after 'server'");
+            }
+            
+            bool closed = false;
+            parseServerBlock(file, &closed);
+            if (!closed)
+                throw std::runtime_error("Unclosed server block");
+        }
+    }
 }
+
 
 void Config::parseServerBlock(std::istream &config_stream, bool *closed)
 {
-	_servers.push_back(ServerConfig());
-	ServerConfig &server = _servers.back();
-	LocationConfig default_location;
+    _servers.push_back(ServerConfig());
+    ServerConfig &server = _servers.back();
+    LocationConfig default_location;
 
-	std::string line;
-	while (std::getline(config_stream, line))
-	{
-		std::istringstream iss(line);
-		std::string directive;
-		iss >> directive;
-		bool location_closed = false;
-		std::string v;
-		std::getline(iss, v);
-		std::cout << line << " | " << directive << ":" << std::istringstream(v) << std::endl;
-		if (directive == "location")
-		{
-			parseLocationBlock(config_stream, server, &location_closed);
-			if (location_closed)
-				printf("location_closed = true\n");
-			if (!location_closed)
-				throw std::runtime_error(
-					"Bad configuration file format : open brackets on location config");
-		} else if (directive == "}")
-		{
-			*closed = true;
-			break;
-		} else
-		{
-			std::string value;
-			std::getline(iss, value);
-			parseDirective(server, default_location, directive, value);
-		}
-	}
+    std::string line;
+    while (std::getline(config_stream, line))
+    {
+        // Eliminar comentarios
+        size_t comment_pos = line.find('#');
+        if (comment_pos != std::string::npos) {
+            line = line.substr(0, comment_pos);
+        }
+        
+        // Eliminar espacios en blanco al inicio y final
+        size_t start = line.find_first_not_of(" \t\r\n");
+        size_t end = line.find_last_not_of(" \t\r\n");
+        
+        if (start == std::string::npos) // línea vacía
+            continue;
+            
+        line = line.substr(start, end - start + 1);
+        
+        std::istringstream iss(line);
+        std::string directive;
+        iss >> directive;
+        
+        // Debug más limpio (opcional)
+        // std::cout << "Directive: [" << directive << "]" << std::endl;
+        
+        bool location_closed = false;
+        
+        if (directive == "location")
+        {
+            parseLocationBlock(config_stream, server, &location_closed);
+            if (!location_closed)
+                throw std::runtime_error("Bad configuration file format : open brackets on location config");
+        } 
+        else if (directive == "}")
+        {
+            *closed = true;
+            break;
+        } 
+        else if (!directive.empty())
+        {
+            std::string value;
+            std::getline(iss, value);
+            
+            // Limpiar el valor
+            size_t val_start = value.find_first_not_of(" \t");
+            if (val_start != std::string::npos)
+                value = value.substr(val_start);
+            
+            parseDirective(server, default_location, directive, value);
+        }
+    }
 
-	server._locations.push_back(default_location);
+    server._locations.push_back(default_location);
 }
 
 void Config::parseLocationBlock(std::istream &config_stream,
